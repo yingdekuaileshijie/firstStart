@@ -57,7 +57,7 @@ namespace Dayi.TSMis.TaxpayerManagement.Business
             Expression<Func<Ent纳税人, bool>> expression = o => o.所属辖区编码.StartsWith(areaNo)
                                                            && ((o.系统自动生成 && o.已确认) || !o.系统自动生成)
                                                            && o.状态 != Enum纳税人状态.删除;
-
+的
             if (!string.IsNullOrWhiteSpace(condition.Name)) { expression = expression.And(o => o.纳税人名称.Contains(condition.Name)); }
             if (!string.IsNullOrWhiteSpace(condition.Address)) { expression = expression.And(o => o.注册地址.Contains(condition.Address)); }
             if (!string.IsNullOrWhiteSpace(condition.Identifier)) { expression = expression.And(o => o.纳税人识别号.Contains(condition.Identifier)); }
