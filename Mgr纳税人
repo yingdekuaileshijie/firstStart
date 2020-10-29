@@ -1,0 +1,817 @@
+using Dayi.Data.Domain.Seedwork.Specification;
+using Dayi.TSMis.Common.Business;
+using Dayi.TSMis.TaxDataManagement.Model;
+using Dayi.TSMis.TaxpayerManagement.Model;
+using Dayi.TSMis.TaxpayerManagement.Model.IRepositories;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Data;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+
+namespace Dayi.TSMis.TaxpayerManagement.Business
+{
+    /// <summary>
+    /// 纳税人台账管理的业务类
+    /// </summary>
+    public class Mgr纳税人 : IMgr纳税人
+    {
+        IEnt纳税人Repository _repository;
+
+        public Mgr纳税人(IEnt纳税人Repository repository)
+        {
+            _repository = repository;
+        }
+
+        #region 获取纳税人
+
+        /// <summary>
+        /// 生成查询表达式（根据搜索关键字）
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns>表达式</returns>
+        private ISpecification<Ent纳税人> GenerateSpecification(string areaNo, string keyword)
+        {
+            Expression<Func<Ent纳税人, bool>> expression = o => o.所属辖区编码.StartsWith(areaNo)
+                                                           && ((o.系统自动生成 && o.已确认) || !o.系统自动生成)
+                                                           && o.状态 != Enum纳税人状态.删除;
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                expression = expression.And(o => o.纳税人名称.Contains(keyword) || o.注册地址.Contains(keyword));
+            }
+
+            //返回
+            return new DirectSpecification<Ent纳税人>(expression);
+        }
+
+        /// <summary>
+        /// 生成查询表达式（根据高级查询条件）
+        /// </summary>
+        /// <param name="condition">高级查询条件</param>
+        /// <returns>表达式</returns>
+        private ISpecification<Ent纳税人> GenerateSpecification(string areaNo, Condition condition)
+        {
+            Expression<Func<Ent纳税人, bool>> expression = o => o.所属辖区编码.StartsWith(areaNo)
+                                                           && ((o.系统自动生成 && o.已确认) || !o.系统自动生成)
+                                                           && o.状态 != Enum纳税人状态.删除;
+
+            if (!string.IsNullOrWhiteSpace(condition.Name)) { expression = expression.And(o => o.纳税人名称.Contains(condition.Name)); }
+            if (!string.IsNullOrWhiteSpace(condition.Address)) { expression = expression.And(o => o.注册地址.Contains(condition.Address)); }
+            if (!string.IsNullOrWhiteSpace(condition.Identifier)) { expression = expression.And(o => o.纳税人识别号.Contains(condition.Identifier)); }
+            if (!string.IsNullOrWhiteSpace(condition.IndustryCode)) { expression = expression.And(o => o.行业代码.StartsWith(condition.IndustryCode)); }
+            if (!string.IsNullOrWhiteSpace(condition.Category)) { expression = expression.And(o => o.企业标签.Contains(condition.Category)); }
+            if (!string.IsNullOrWhiteSpace(condition.AreaNo)) { expression = expression.And(o => o.所属辖区编码.StartsWith(condition.AreaNo)); }
+            if (condition.CreateTimeBegin != null) { expression = expression.And(o => o.创建时间 >= condition.CreateTimeBegin); }
+            if (condition.CreateTimeEnd != null) { expression = expression.And(o => o.创建时间 <= condition.CreateTimeEnd); }
+
+            return new DirectSpecification<Ent纳税人>(expression);
+        }
+
+        /// <summary>
+        /// 根据查询表达式查询某页数据
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <param name="zeroBasedPageIndex"></param>
+        /// <param name="pageSize"></param>
+        /// <param name="order"></param>
+        /// <param name="is降序"></param>
+        /// <param name="spec"></param>
+        /// <returns>纳税人集合</returns>
+        private IEnumerable<Ent纳税人> GetAllPaged<TKey>(int zeroBasedPageIndex, int pageSize, Func<Ent纳税人, TKey> order, bool is降序, ISpecification<Ent纳税人> spec)
+        {
+            if (is降序)
+            {
+                return _repository.FindBySpecification(spec).OrderByDescending(order).Skip(pageSize * zeroBasedPageIndex).Take(pageSize);
+            }
+            else
+            {
+                return _repository.FindBySpecification(spec).OrderBy(order).Skip(pageSize * zeroBasedPageIndex).Take(pageSize);
+            }
+        }
+
+        /// <summary>
+        /// 获取系统中所有的纳税人台账
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns>纳税人台账实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetAll(string areaNo, string keyword)
+        {
+            return _repository.FindBySpecification(this.GenerateSpecification(areaNo, keyword));
+        }
+
+        /// <summary>
+        /// 获取系统中所有的纳税人台账
+        /// </summary>
+        /// <param name="condition">高级搜索条件</param>
+        /// <returns>纳税人台账实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetAll(string areaNo, Condition condition)
+        {
+            return _repository.FindBySpecification(this.GenerateSpecification(areaNo, condition));
+        }
+
+        /// <summary>
+        /// 获取台账总数
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns></returns>
+        int IMgr纳税人.GetCount(string areaNo, string keyword)
+        {
+            return (int)_repository.FindBySpecification(this.GenerateSpecification(areaNo, keyword)).Count();
+        }
+
+        /// <summary>
+        /// 获取台账总数
+        /// </summary>
+        /// <param name="Condition">查询条件</param>
+        /// <returns></returns>
+        int IMgr纳税人.GetCount(string areaNo, Condition condition)
+        {
+            return (int)_repository.FindBySpecification(this.GenerateSpecification(areaNo, condition)).Count();
+        }
+
+        /// <summary>
+        /// 获取系统中所有的纳税人台账(获取指定页)
+        /// </summary>
+        /// <param name="pageIndex">页码，从0开始</param>
+        /// <param name="pageCount">每页行数</param>
+        /// <returns>第pageIndex页功能实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetAllPaged<TKey>(string areaNo, int pageIndex, int pageSize, Func<Ent纳税人, TKey> order, bool is降序, string keyword)
+        {
+            ISpecification<Ent纳税人> spec = this.GenerateSpecification(areaNo, keyword);
+            return this.GetAllPaged(pageIndex, pageSize, order, is降序, spec);
+        }
+
+        /// <summary>
+        /// 获取系统中所有的纳税人台账(获取指定页)
+        /// </summary>
+        /// <param name="pageIndex">页码，从0开始</param>
+        /// <param name="pageCount">每页行数</param>
+        /// <returns>第pageIndex页功能实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetAllPaged<TKey>(string areaNo, int pageIndex, int pageSize, Func<Ent纳税人, TKey> order, bool is降序, Condition condition)
+        {
+            ISpecification<Ent纳税人> spec = this.GenerateSpecification(areaNo, condition);
+            return this.GetAllPaged(pageIndex, pageSize, order, is降序, spec);
+        }
+
+        /// <summary>
+        /// 根据Id获取纳税人
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        Ent纳税人 IMgr纳税人.GetById(Guid id)
+        {
+            return _repository.GetByKey(id);
+        }
+
+        /// <summary>
+        /// 根据纳税人识别号获取纳税人台账
+        /// </summary>
+        /// <param name="lst登记编码">登记编码的集合</param>
+        /// <returns>纳税人实体对象集</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetBy纳税人识别号(string str纳税人识别号)
+        {
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => o.纳税人识别号 == str纳税人识别号 && o.状态 != Enum纳税人状态.删除);
+            return _repository.FindBySpecification(spec);
+        }
+
+        /// <summary>
+        /// 查找同名台账
+        /// </summary>
+        /// <param name="names">纳税人名称</param>
+        /// <returns>符合条件的纳税人台账实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetBy纳税人名称(List<string> names)
+        {
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => names.Contains(o.纳税人名称) && o.状态 != Enum纳税人状态.删除);
+            return _repository.FindBySpecification(spec);
+        }
+
+        /// <summary>
+        /// 查找符合条件的纳税人台账
+        /// </summary>
+        /// <param name="spec">需要满足的查找条件</param>
+        /// <returns>符合条件的纳税人台账实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.Find(ISpecification<Ent纳税人> spec)
+        {
+            return _repository.FindBySpecification(spec);
+        }
+
+        /// <summary>
+        /// 获取纳税人识别号和纳税人名称字典
+        /// </summary>
+        /// <returns>kye:纳税人识别号 value:纳税人字典</returns>
+        Dictionary<string, string> IMgr纳税人.GetDic纳税人识别号And纳税人名称()
+        {
+            DirectSpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => !string.IsNullOrEmpty(o.纳税人识别号) && o.状态 != Enum纳税人状态.删除);
+            return this._repository.FindBySpecification(spec).Select(s => new { s.纳税人识别号, s.纳税人名称 }).ToDictionary(k => k.纳税人识别号, v => v.纳税人名称);
+        }
+        #endregion
+
+        #region 获取重复台账
+
+        /// <summary>
+        /// 生成查询表达式--待确认（根据搜索关键字）
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns>表达式</returns>
+        private ISpecification<Ent纳税人> GenerateSpecificationForRepeat纳税人(string areaNo, string keyword)
+        {
+            //获取访问请求人所在辖区编码            
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(predicate => (string.IsNullOrEmpty(predicate.所属辖区编码) || predicate.所属辖区编码.StartsWith(areaNo)) && predicate.状态 != Enum纳税人状态.删除);
+
+            //重复的纳税人名称集合
+            List<string> duplicationOfTaxNames = new List<string>();
+
+            //根据指定条件获取重复的纳税人名称
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                duplicationOfTaxNames.AddRange(this._repository.FindBySpecification(spec).GroupBy(keySelector => keySelector.纳税人名称)
+                    .Where(having => having.Count() > 1 && (having.Key.Contains(keyword) || having.Any(predicate => predicate.注册地址.Contains(keyword))))
+                    .Select(selector => selector.Key));
+            }
+            else
+            {
+                duplicationOfTaxNames.AddRange(this._repository.FindBySpecification(spec).GroupBy(keySelector => keySelector.纳税人名称)
+                    .Where(having => having.Count() > 1)
+                    .Select(selector => selector.Key));
+            }
+
+            //返回条件的数据
+            return new DirectSpecification<Ent纳税人>(predicate => duplicationOfTaxNames.Contains(predicate.纳税人名称) && (string.IsNullOrEmpty(predicate.所属辖区编码) || predicate.所属辖区编码.StartsWith(areaNo)) && predicate.状态 != Enum纳税人状态.删除);
+        }
+
+        /// <summary>
+        /// 获取待确认台账数
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns>待确认台账数</returns>
+        int IMgr纳税人.GetCountForRepeat纳税人(string areaNo, string keyword)
+        {
+            return (int)_repository.FindBySpecification(this.GenerateSpecificationForRepeat纳税人(areaNo, keyword)).Count();
+        }
+
+        /// <summary>
+        /// 获取系统中所有的待确认台账(获取指定页)
+        /// </summary>
+        /// <param name="pageIndex">页码，从0开始</param>
+        /// <param name="pageCount">每页行数</param>
+        /// <returns>第pageIndex页功能实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetAllPagedForRepeat纳税人(string areaNo, int pageIndex, int pageSize, string keyword)
+        {
+            ISpecification<Ent纳税人> spec = this.GenerateSpecificationForRepeat纳税人(areaNo, keyword);
+            return _repository.FindBySpecification(spec).OrderBy(o => o.纳税人名称).Skip(pageSize * pageIndex).Take(pageSize);
+        }
+
+        #endregion
+
+        #region 维护纳税人
+        /// <summary>
+        /// 创建维护记录
+        /// </summary>
+        /// <param name="enum操作类型">enum操作类型</param>
+        /// <returns></returns>
+        private void Create维护记录(Ent纳税人 ent纳税人, Enum操作类型 enum操作类型)
+        {
+            //创建维护记录
+            Ent纳税人维护记录 ent维护记录 = new Ent纳税人维护记录();
+            //ent维护记录.GenerateNewIdentity();//该行不需要，给Id赋值后会导致在commit时识别为modify，就会报错误：预期影响1行实际影响0行
+            ent维护记录.纳税人Id = ent纳税人.Id;
+            ent维护记录.辖区编码 = ent纳税人.所属辖区编码;
+            ent维护记录.纳税人状态 = ent纳税人.状态;
+            ent维护记录.操作类型 = enum操作类型;
+            ent维护记录.操作人 = MgrHelper.CurrentUserName;
+            ent维护记录.操作时间 = DateTime.Now;
+            ent纳税人.纳税人维护记录集.Add(ent维护记录);
+        }
+
+        /// <summary>
+        /// 保存指定的纳税人实体对象
+        /// </summary>
+        /// <param name="ent纳税人">纳税人实体对象</param>
+        int IMgr纳税人.Save(Ent纳税人 ent纳税人)
+        {
+            List<ValidationResult> results = new List<ValidationResult>();
+            bool isValid = Validator.TryValidateObject(ent纳税人,
+                new ValidationContext(ent纳税人),
+                results);
+            if (!isValid)
+                throw new ArgumentException("保存时出错：纳税人数据不合法！\r\n\r\n"
+                    + string.Join("\r\n", results.Select(r => r.ErrorMessage)));
+
+            // TODO: 根据税务识别号、营业执照号检查纳税人台账是否重复
+            if (!string.IsNullOrWhiteSpace(ent纳税人.纳税人识别号))
+            {
+                IEnumerable<Ent纳税人> ents纳税人 = ((IMgr纳税人)this).GetBy纳税人识别号(ent纳税人.纳税人识别号);
+                if (ents纳税人.Where(e => e.Id != ent纳税人.Id).Count() > 0)
+                {
+                    throw new Exception(string.Format("统一社会信用代码【{0}】在现有台账中已存在！", ent纳税人.纳税人识别号));
+                }
+            }
+
+            // 保存
+            var ent = _repository.GetByKey(ent纳税人.Id);
+            if (ent == null)
+            {
+                ent纳税人.GenerateNewIdentity();
+                ent纳税人.状态 = Enum纳税人状态.正常;
+                ent纳税人.系统自动生成 = false;
+                ent纳税人.已确认 = true;
+
+                //创建维护记录
+                this.Create维护记录(ent纳税人, Enum操作类型.新建);
+
+                //新增时，需要增加“纳税人所属辖区”对象
+                Ent纳税人所属辖区 ent纳税人所属辖区 = new Ent纳税人所属辖区();
+                //ent纳税人所属辖区.GenerateNewIdentity();//该行不需要，给Id赋值后会导致在commit时识别为modify，就会报错误：预期影响1行实际影响0行
+                ent纳税人所属辖区.纳税人Id = ent纳税人.Id;
+                ent纳税人所属辖区.所属辖区编码 = ent纳税人.所属辖区编码;
+                ent纳税人所属辖区.登记日期 = DateTime.Now;
+                ent纳税人所属辖区.状态 = true;
+                ent纳税人.纳税人所属辖区集.Add(ent纳税人所属辖区);
+
+                _repository.Add(ent纳税人);
+            }
+            else
+            {
+                string orign所属辖区编码 = (this._repository.UnitOfWork as DbContext).Entry(ent).OriginalValues.GetValue<string>("所属辖区编码").ToString();
+                string current所属辖区编码 = ent纳税人.所属辖区编码;
+                if (!string.Equals(orign所属辖区编码, current所属辖区编码))
+                {
+                    #region 辖区发生变化：则需要在原辖区登记删除，在目标辖区登记新建
+                    ent纳税人.所属辖区编码 = orign所属辖区编码;
+                    this.Create维护记录(ent纳税人, Enum操作类型.删除);
+
+                    ent纳税人.所属辖区编码 = current所属辖区编码;
+                    this.Create维护记录(ent纳税人, Enum操作类型.新建);
+                    #endregion
+
+                    #region 如果辖区发生了改变，则需要置原有无效，并生成一条新的“纳税人所属辖区”
+                    foreach (Ent纳税人所属辖区 ent纳税人所属辖区 in ent.纳税人所属辖区集)
+                    {
+                        ent纳税人所属辖区.状态 = false;
+                    }
+
+                    Ent纳税人所属辖区 entNew纳税人所属辖区 = new Ent纳税人所属辖区();
+                    //entNew纳税人所属辖区.GenerateNewIdentity();//该行不需要，给Id赋值后会导致在commit时识别为modify，就会报错误：预期影响1行实际影响0行
+                    entNew纳税人所属辖区.纳税人Id = ent纳税人.Id;
+                    entNew纳税人所属辖区.所属辖区编码 = ent纳税人.所属辖区编码;
+                    entNew纳税人所属辖区.登记日期 = DateTime.Now;
+                    entNew纳税人所属辖区.状态 = true;
+                    ent.纳税人所属辖区集.Add(entNew纳税人所属辖区);
+                    #endregion
+                }
+                else
+                {
+                    //创建维护记录
+                    this.Create维护记录(ent纳税人, Enum操作类型.修改);
+                }
+
+
+                //若ent纳税人在上下文中则会抛出异常，不用理会，直接保存即可
+                try { _repository.Merge(ent, ent纳税人); } catch { }
+            }
+
+            return _repository.UnitOfWork.Commit();
+        }
+
+        /// <summary>
+        /// 根据Id删除纳税人
+        /// </summary>
+        /// <param name="ids">纳税人Id集合</param>
+        void IMgr纳税人.Delete(params Guid[] ids)
+        {
+            foreach (Guid id in ids)
+            {
+                var ent = (this as IMgr纳税人).GetById(id);
+                if (ent == null)
+                {
+                    throw new ArgumentException("纳税人Id在系统中不存在！");
+                }
+                else
+                {
+                    //创建维护记录
+                    this.Create维护记录(ent, Enum操作类型.删除);//要先创建维护记录，再改变状态，因为要记录操作时的纳税人状态
+
+                    ent.状态 = Enum纳税人状态.删除;
+
+                }
+            }
+
+            _repository.UnitOfWork.Commit();
+        }
+
+        /// <summary>
+        /// 注销纳税人
+        /// </summary>
+        /// <param name="id">纳税人Id</param>
+        void IMgr纳税人.Destory(Guid id)
+        {
+            var ent = (this as IMgr纳税人).GetById(id);
+            if (ent == null)
+            {
+                throw new ArgumentException("纳税人Id在系统中不存在！");
+            }
+            else
+            {
+                //创建维护记录
+                this.Create维护记录(ent, Enum操作类型.注销);//要先创建维护记录，再改变状态，因为要记录操作时的纳税人状态
+
+                ent.状态 = Enum纳税人状态.注销;
+            }
+
+            _repository.UnitOfWork.Commit();
+        }
+        #endregion
+
+        #region 生成纳税人
+        /// <summary>
+        /// 根据税务登记底册生成台账
+        /// </summary>
+        /// <param name="ents税务登记">税务登记底册实体对象的集合</param>
+        /// <param name="arg税务登记类型">税务登记类型枚举</param>
+        /// <remarks>
+        /// 根据纳税人识别号判断系统中是否存在台账，如果不存在，则新生成一个台账；
+        /// 如果存在且已改变，则修改台账；否则忽略它。
+        /// 最小成功保证：具有相同纳税人识别号的国、地税，生成在同一个台账中。
+        /// </remarks>
+        public void Generate(List<Ent税务登记> ents税务登记)
+        {
+            var listDV纳税人 = _repository.GetAll纳税人简要视图();
+            // 国税纳税人识别号-台账登记编码字典 Dictionary<国税纳税人识别号, 纳税人登记编码>
+            Dictionary<string, Guid> dic纳税人 = listDV纳税人.Where(o => !string.IsNullOrEmpty(o.纳税人识别号)).ToDictionary(o => o.纳税人识别号, o => o.Id);
+
+            // 需要添加国税纳税人识别号的台账集合。 Dictionary<登记编码, 国税纳税人识别号>
+            Dictionary<string, string> dic添加纳税人识别号 = new Dictionary<string, string>();
+            // 需要新建的纳税人台账
+            List<Ent纳税人> toAdd纳税人集合 = new List<Ent纳税人>();
+            foreach (var ent税务登记 in ents税务登记)
+            {
+                if (dic纳税人.ContainsKey(ent税务登记.纳税人识别号)) continue;
+                else
+                {
+                    toAdd纳税人集合.Add(Create(ent税务登记));
+                }
+            }
+
+            // 为了使用BulkCopy技术，将实体对象集合转换为DataTable
+            DataTable table = new MgrExcelFile().ConvertEntitiesToDataTable(toAdd纳税人集合);
+
+            // 批量保存：Insert & Update
+            int? timeout = (_repository.UnitOfWork as DbContext).Database.GetCommandTimeout();
+            (_repository.UnitOfWork as DbContext).Database.SetCommandTimeout(300); 
+            _repository.BulkCopyUpsert(table);
+            (_repository.UnitOfWork as DbContext).Database.SetCommandTimeout(timeout);
+        }
+
+        /// <summary>
+        /// 根据税务登记创建纳税人台账
+        /// </summary>
+        /// <param name="ent税务登记">税务登记实体对象</param>
+        /// <param name="arg税务登记类型">税务登记类型枚举</param>
+        /// <returns>新建的纳税人实体对象</returns>
+        private Ent纳税人 Create(Ent税务登记 ent税务登记)
+        {
+            var ent = new Ent纳税人()
+            {
+                纳税人名称 = ent税务登记.纳税人名称,
+                所属辖区编码 = ent税务登记.所属辖区编码,
+                行业代码 = ent税务登记.行业代码
+            };
+            ent.GenerateNewIdentity();
+
+            ent.纳税人识别号 = ent税务登记.纳税人识别号; ;
+
+            return ent;
+        }
+        #endregion
+
+        #region 确认台账相关
+
+        /// <summary>
+        /// 生成查询表达式--待确认（根据搜索关键字）
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns>表达式</returns>
+        private ISpecification<Ent纳税人> GenerateSpecificationFor待确认(string keyword)
+        {
+            Expression<Func<Ent纳税人, bool>> expression = o => o.系统自动生成 && !o.已确认;
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                expression = expression.And(o => o.纳税人名称.Contains(keyword) || o.注册地址.Contains(keyword));
+            }
+
+            //返回
+            return new DirectSpecification<Ent纳税人>(expression);
+        }
+
+        /// <summary>
+        /// 获取待确认台账数
+        /// </summary>
+        /// <param name="keyword">搜索关键字</param>
+        /// <returns>待确认台账数</returns>
+        int IMgr纳税人.GetCountFor待确认(string keyword)
+        {
+            return (int)_repository.FindBySpecification(this.GenerateSpecificationFor待确认(keyword)).Count();
+        }
+
+        /// <summary>
+        /// 获取系统中所有的待确认台账(获取指定页)
+        /// </summary>
+        /// <param name="pageIndex">页码，从0开始</param>
+        /// <param name="pageCount">每页行数</param>
+        /// <returns>第pageIndex页功能实体对象的集合</returns>
+        IEnumerable<Ent纳税人> IMgr纳税人.GetAllPagedFor待确认(int pageIndex, int pageSize, string keyword)
+        {
+            ISpecification<Ent纳税人> spec = this.GenerateSpecificationFor待确认(keyword);
+            return _repository.FindBySpecification(spec).OrderBy(o => o.所属辖区编码).ThenBy(o => o.纳税人名称).Skip(pageSize * pageIndex).Take(pageSize);
+        }
+
+        /// <summary>
+        /// 申请
+        /// </summary>
+        /// <param name="ids">纳税人Id集合</param>
+        /// <param name="areaNo">申请辖区</param>
+        /// <returns>成功：true 失败：false</returns>
+        public void Apply纳税人(List<Guid> ids, string areaNo, string areaNo未分配税收)
+        {
+            if (ids.Count == 0) { throw new Exception("没有要申请的台账"); }
+
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => ids.Contains(o.Id));
+            List<Ent纳税人> ents = _repository.FindBySpecification(spec).Include("纳税人所属辖区集").ToList();
+
+            //只申请一个台账时，判断不允许重复申请;当时批量申请时，跳过该检查
+            if (ents.Count == 1 && !string.IsNullOrWhiteSpace(ents[0].所属辖区编码) && ents[0].所属辖区编码.Contains(areaNo)) { throw new Exception("已申请到当前辖区，请勿重复申请！"); }
+
+            foreach (Ent纳税人 ent in ents)
+            {
+                if (string.Equals(areaNo未分配税收, ent.所属辖区编码)) { ent.所属辖区编码 = string.Empty; }
+
+                if (string.IsNullOrWhiteSpace(ent.所属辖区编码) || !ent.所属辖区编码.Contains(areaNo))
+                {
+                    if (!string.IsNullOrWhiteSpace(ent.所属辖区编码) && ent.所属辖区编码.Length > 0) { ent.所属辖区编码 += ","; }
+                    ent.所属辖区编码 += areaNo;
+                    //_repository.Modify(ent);该行不需要，因为上下文从获取到保存没变化，上下文中都记录了所有变更
+                }
+            }
+
+            _repository.UnitOfWork.Commit();
+        }
+
+        /// <summary>
+        /// 取消申请
+        /// </summary>
+        /// <param name="ids">纳税人Id集合</param>
+        /// <param name="areaNo">要取消的辖区编码</param>
+        /// <returns>成功：true 失败：false</returns>
+        public void CancelApply纳税人(List<Guid> ids, string areaNo)
+        {
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => ids.Contains(o.Id));
+            List<Ent纳税人> ents = _repository.FindBySpecification(spec).ToList();
+            foreach (Ent纳税人 ent in ents)
+            {
+                if (!string.IsNullOrWhiteSpace(ent.所属辖区编码))
+                {
+                    List<string> strs = ent.所属辖区编码.Split(',').ToList();
+                    if (strs.Contains(areaNo))
+                    {
+                        strs.Remove(areaNo);
+                    }
+
+                    ent.所属辖区编码 = string.Join(",", strs);
+                }
+
+                //_repository.Modify(ent);该行不需要，因为上下文从获取到保存没变化，上下文中都记录了所有变更
+            }
+
+            _repository.UnitOfWork.Commit();
+        }
+
+        /// <summary>
+        /// 确认纳税人到指定辖区
+        /// </summary>
+        /// <param name="ids">纳税人Id集合</param>
+        /// <param name="userName">确认人</param>
+        /// <param name="areaNo">要确认到的辖区编码</param>
+        /// <returns>成功归属x个台账到xx辖区</returns>
+        public string Confirm纳税人ToArea(List<Guid> ids, string userName, string areaNo)
+        {
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => ids.Contains(o.Id) && !o.已确认);
+            List<Ent纳税人> ents = _repository.FindBySpecification(spec).Include("纳税人所属辖区集").ToList();
+            foreach (Ent纳税人 ent in ents)
+            {
+                ent.已确认 = true;
+                ent.所属辖区编码 = areaNo;
+
+                //创建维护记录
+                this.Create维护记录(ent, Enum操作类型.新建);
+
+                Ent纳税人所属辖区 ent纳税人所属辖区 = ent.纳税人所属辖区集.FirstOrDefault(e => e.状态);
+                if (ent纳税人所属辖区 == null)
+                {
+                    ent纳税人所属辖区 = new Ent纳税人所属辖区();
+                    ent.纳税人所属辖区集.Add(ent纳税人所属辖区);
+                    //ent纳税人所属辖区.GenerateNewIdentity();//该行不需要，给Id赋值后会导致在commit时识别为modify，就会报错误：预期影响1行实际影响0行
+                    ent纳税人所属辖区.纳税人Id = ent.Id;
+                    ent纳税人所属辖区.状态 = true;
+                }
+                ent纳税人所属辖区.所属辖区编码 = ent.所属辖区编码;
+                ent纳税人所属辖区.登记日期 = DateTime.Now;
+
+                //ent.纳税人所属辖区集.Add(ent纳税人所属辖区);
+                //_repository.Modify(ent);该行不需要，因为上下文从获取到保存没变化，上下文中都记录了所有变更
+            }
+
+            _repository.UnitOfWork.Commit();
+            return string.Format("成功归属{0}个台账到{1}", ents.Count, areaNo);
+        }
+
+        /// <summary>
+        /// 检查--根据申请确认台账前的检查
+        /// </summary>
+        /// <param name="ids">要确认的台账Id集合</param>
+        /// <returns>检查结果</returns>       
+        public string CheckConfirm纳税人ByApply(List<Guid> ids, string areaNo未分配税收)
+        {
+            int count未申请 = 0;
+            int count多个辖区同时申请 = 0;
+
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => ids.Contains(o.Id) && !o.已确认);
+            List<Ent纳税人> ents = _repository.FindBySpecification(spec).ToList();
+
+            foreach (Ent纳税人 ent in ents)
+            {
+                //未申请
+                if (string.IsNullOrWhiteSpace(ent.所属辖区编码))
+                {
+                    count未申请++;
+                }
+                else if (string.Equals(areaNo未分配税收, ent.所属辖区编码))
+                {
+                    count未申请++;
+                }
+                else if (ent.所属辖区编码.Split(',').Count() > 1)//多个辖区同时申请了
+                {
+                    count多个辖区同时申请++;
+                }
+            }
+
+            //返回
+            StringBuilder message = new StringBuilder();
+            if (count未申请 > 0) { message.Append(string.Format("{0}个台帐由于没有辖区申请，无法归属！", count未申请)); }
+            if (count多个辖区同时申请 > 0) { message.AppendLine(string.Format("{0}个台帐由于多个辖区申请，无法归属！", count多个辖区同时申请)); }
+            return message.ToString();
+        }
+
+        /// <summary>
+        /// 批量确认--根据申请确认台账
+        /// </summary>
+        /// <param name="ids">要确认的台账Id集合</param>    
+        /// <returns>成功归属n个台账到xx辖区，n1个到xx1辖区</returns>
+        public string Confirm纳税人ByApply(List<Guid> ids, string userName)
+        {
+            //返回值
+            StringBuilder messag = new StringBuilder();
+
+            //key:辖区编码 value:台账数，用于生成提示信息
+            Dictionary<string, int> dics = new Dictionary<string, int>();
+
+            ISpecification<Ent纳税人> spec = new DirectSpecification<Ent纳税人>(o => ids.Contains(o.Id) && !o.已确认);
+            List<Ent纳税人> ents = _repository.FindBySpecification(spec).Include("纳税人所属辖区集").ToList();
+            foreach (Ent纳税人 ent in ents)
+            {
+                if (string.IsNullOrWhiteSpace(ent.所属辖区编码)) { continue; }//未申请
+                if (ent.所属辖区编码.Split(',').Count() > 1) { continue; }//多个辖区同时申请了
+
+                ent.已确认 = true;
+                //ent.所属辖区编码 = areaNo;//直接归属到申请辖区，所以该行注释掉             
+
+                //创建维护记录
+                this.Create维护记录(ent, Enum操作类型.新建);
+
+                //纳税人所属辖区集
+                Ent纳税人所属辖区 ent纳税人所属辖区 = ent.纳税人所属辖区集.FirstOrDefault(e => e.状态);
+                if (ent纳税人所属辖区 == null)
+                {
+                    ent纳税人所属辖区 = new Ent纳税人所属辖区();
+                    ent.纳税人所属辖区集.Add(ent纳税人所属辖区);
+                    //ent纳税人所属辖区.GenerateNewIdentity();//该行不需要，给Id赋值后会导致在commit时识别为modify，就会报错误：预期影响1行实际影响0行
+                    ent纳税人所属辖区.纳税人Id = ent.Id;
+                    ent纳税人所属辖区.状态 = true;
+                }
+                ent纳税人所属辖区.所属辖区编码 = ent.所属辖区编码;
+                ent纳税人所属辖区.登记日期 = DateTime.Now;
+
+                //ent.纳税人所属辖区集.Add(ent纳税人所属辖区);
+                //_repository.Modify(ent);该行不需要，因为上下文从获取到保存没变化，上下文中都记录了所有变更
+
+                //加入字典
+                if (!dics.ContainsKey(ent.所属辖区编码)) { dics.Add(ent.所属辖区编码, 0); }
+                dics[ent.所属辖区编码]++;
+            }
+
+            //提交更改到数据库中
+            _repository.UnitOfWork.Commit();
+
+            //生成提示信息：成功归属n个台账到xx辖区，n1个到xx1辖区
+            if (dics.Count > 0) { messag.AppendLine("成功归属"); }
+            foreach (string key in dics.Keys)
+            {
+                messag.AppendLine(string.Format("{0}个到{1}", dics[key], key));
+            }
+            return messag.ToString();
+        }
+
+        #endregion        
+
+        #region 迁移台账
+        /// <summary>
+        /// 迁移台账
+        /// </summary>
+        /// <param name="taxpayerId">纳税人Id</param>
+        /// <param name="destAreaNo">目标辖区编码</param>
+        /// <param name="tax">同步迁移到目标辖区的税收（年、月)</param>
+        void IMgr纳税人.Move(Guid taxpayerId, string destAreaNo)
+        {
+            var ent纳税人 = (this as IMgr纳税人).GetById(taxpayerId);
+            if (ent纳税人 == null)
+            {
+                throw new ArgumentException("纳税人登记编码在系统中不存在！");
+            }
+
+            //置原来所在辖区为无效
+            foreach (Ent纳税人所属辖区 ent in ent纳税人.纳税人所属辖区集)
+            {
+                ent.状态 = false;
+            }
+
+            //创建迁出记录
+            this.Create维护记录(ent纳税人, Enum操作类型.迁出);
+
+            //迁移到目标辖区
+            ent纳税人.所属辖区编码 = destAreaNo;
+            Ent纳税人所属辖区 ent纳税人所属辖区 = new Ent纳税人所属辖区();
+            ent纳税人.纳税人所属辖区集.Add(ent纳税人所属辖区);
+            //ent纳税人所属辖区.GenerateNewIdentity();//该行不需要，给Id赋值后会导致在commit时识别为modify，就会报错误：预期影响1行实际影响0行
+            ent纳税人所属辖区.纳税人Id = taxpayerId;
+            ent纳税人所属辖区.所属辖区编码 = destAreaNo;
+            ent纳税人所属辖区.登记日期 = DateTime.Now;
+            ent纳税人所属辖区.状态 = true;
+
+            //创建迁入记录
+            this.Create维护记录(ent纳税人, Enum操作类型.迁入);
+
+            //_repository.Modify(ent纳税人);//该行不需要，因为上下文从获取到保存没变化，上下文中都记录了所有变更
+            _repository.UnitOfWork.Commit();
+        }
+        #endregion
+    }
+
+    /// <summary>
+    /// 查询条件类
+    /// </summary>
+    public class Condition
+    {
+        /// <summary>
+        /// 纳税人名称
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// 纳税人地址
+        /// </summary>
+        public string Address { get; set; }
+
+        /// <summary>
+        /// 纳税人识别号
+        /// </summary>
+        public string Identifier { get; set; }
+
+        /// <summary>
+        /// 行业代码
+        /// </summary>
+        public string IndustryCode { get; set; }
+
+        /// <summary>
+        /// 企业类别
+        /// </summary>
+        public string Category { get; set; }
+
+        /// <summary>
+        /// 辖区编码
+        /// </summary>
+        public string AreaNo { get; set; }
+
+        /// <summary>
+        /// 好像创建时间起
+        /// </summary>
+        public DateTime? CreateTimeBegin { get; set; }
+
+        /// <summary>
+        /// 创建时间止
+        /// </summary>
+        public DateTime? CreateTimeEnd { get; set; }
+    }
+}
